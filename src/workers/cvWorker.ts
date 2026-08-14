@@ -10,27 +10,19 @@ import { runOmrPipeline, OmrPipelineError } from "../lib/cv/pipeline";
  * implementation froze the entire tab — including DevTools — while
  * opencv.js loaded/compiled; a Worker's own thread can block all it wants
  * without touching the page's responsiveness.
- *
- * Loading uses `fetch` + indirect `eval` rather than `importScripts` —
- * `importScripts` only exists in *classic* workers, and Vite may serve a
- * `new Worker(url)` as a native ES module worker in dev regardless of build
- * output format, where `importScripts` throws. Indirect eval (`(0, eval)`)
- * runs the fetched UMD script in the worker's global scope in either kind
- * of worker, so `root.cv = factory()` inside opencv.js's own UMD wrapper
- * attaches to `self` the same way either way.
  */
 
 let cvPromise: Promise<Cv> | null = null;
-// Referencing eval via a property access (rather than calling the bare
-// identifier) makes this an *indirect* eval per spec, so it runs in the
-// worker's global scope instead of this function's local scope.
 const runInGlobalScope = globalThis.eval;
 
 async function loadCv(): Promise<Cv> {
   if (cvPromise) return cvPromise;
 
   cvPromise = (async () => {
-    const response = await fetch("/opencv/opencv.js");
+    // BASE_URL é "/" no desenvolvimento e "/corretor-de-provas/" no
+    // GitHub Pages, evitando que o worker procure o OpenCV na raiz do domínio.
+    const opencvUrl = `${import.meta.env.BASE_URL}opencv/opencv.js`;
+    const response = await fetch(opencvUrl);
     if (!response.ok) {
       throw new Error(`Falha ao baixar opencv.js: ${response.status}`);
     }
